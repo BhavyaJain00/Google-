@@ -1,0 +1,907 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lead Finder · Google Maps</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%232a78d6' stroke-width='2.4'%3E%3Cpath d='M12 22s7-6.2 7-12a7 7 0 1 0-14 0c0 5.8 7 12 7 12z'/%3E%3Ccircle cx='12' cy='10' r='2.6'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="/vendor/leaflet.css">
+<style>
+:root {
+  color-scheme: light;
+  --page: #f9f9f7; --surface: #fcfcfb; --surface-2: #f2f1ed; --surface-3: #e9e8e3;
+  --ink: #0b0b0b; --ink-2: #52514e; --muted: #75736e;
+  --grid: #e1e0d9; --axis: #c3c2b7; --border: rgba(11,11,11,.10);
+  --accent: #2a78d6; --accent-hover: #256abf; --accent-ink: #ffffff; --accent-wash: rgba(42,120,214,.10);
+  --good: #0ca30c; --good-text: #006300; --warning: #fab219; --warning-text: #7a5200; --critical: #d03b3b;
+  --shadow: 0 1px 2px rgba(0,0,0,.04), 0 6px 20px rgba(0,0,0,.04);
+  --radius: 12px;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --page: #0d0d0d; --surface: #1a1a19; --surface-2: #232321; --surface-3: #2c2c2a;
+    --ink: #f0efec; --ink-2: #c3c2b7; --muted: #9a988f;
+    --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,.10);
+    --accent: #3987e5; --accent-hover: #5598e7; --accent-ink: #ffffff; --accent-wash: rgba(57,135,229,.16);
+    --good-text: #0ca30c; --warning-text: #fab219; --critical: #e66767;
+    --shadow: none;
+  }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--page); color: var(--ink); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+button, input, select, textarea { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+[hidden] { display: none !important; }
+.muted { color: var(--muted); }
+.small { font-size: 12px; }
+.pad { padding: 16px; }
+.nowrap { white-space: nowrap; }
+
+/* top bar */
+.topbar { position: sticky; top: 0; z-index: 1100; display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  padding: 12px 24px; background: var(--surface); border-bottom: 1px solid var(--border); }
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 650; font-size: 16px; }
+.brand svg { color: var(--accent); }
+.brand span { color: var(--muted); font-weight: 400; font-size: 13px; }
+#scraperStatus { display: flex; align-items: center; gap: 8px; }
+
+.wrap { max-width: 1680px; margin: 0 auto; padding: 16px 24px 48px; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); }
+
+/* buttons */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 36px; padding: 0 14px; border-radius: 8px;
+  border: 1px solid var(--border); background: var(--surface); color: var(--ink); cursor: pointer; font-weight: 550; white-space: nowrap; text-decoration: none; }
+.btn:hover { background: var(--surface-2); text-decoration: none; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.btn.primary:hover { background: var(--accent-hover); }
+.btn.small { height: 28px; padding: 0 10px; font-size: 12px; border-radius: 6px; }
+.btn.ghost { background: transparent; }
+.btn.danger { color: var(--critical); }
+.btn:disabled { opacity: .55; cursor: default; }
+
+/* search */
+.search { padding: 16px 18px; }
+.search label.big { display: block; font-weight: 600; margin-bottom: 8px; }
+.searchrow { display: flex; gap: 10px; align-items: flex-start; }
+.searchrow textarea { flex: 1; min-height: 44px; max-height: 160px; resize: none; padding: 11px 14px; border-radius: 10px;
+  border: 1px solid var(--axis); background: var(--page); font-size: 15px; line-height: 1.4; }
+.searchrow textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: transparent; }
+.searchrow .btn.primary { height: 44px; padding: 0 22px; font-size: 15px; }
+.opts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 22px; margin-top: 12px; color: var(--ink-2); }
+.opts label { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+.opts select { height: 30px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); padding: 0 6px; }
+.opts .hint { flex-basis: 100%; font-size: 12px; color: var(--muted); }
+.planline { margin-top: 10px; font-size: 13px; color: var(--ink-2); }
+.planline:empty { display: none; }
+.planline.error { color: var(--critical); }
+.planline b { color: var(--ink); }
+.formmsg { margin-top: 10px; font-weight: 550; color: var(--good-text); min-height: 0; }
+.formmsg:empty { display: none; }
+.formmsg.error { color: var(--critical); }
+
+/* layout */
+.layout { display: grid; grid-template-columns: 290px minmax(0, 1fr); gap: 16px; margin-top: 16px; align-items: start; }
+@media (max-width: 980px) { .layout { grid-template-columns: 1fr; } }
+.jobs { position: sticky; top: 76px; max-height: calc(100vh - 96px); overflow: auto; }
+.jobs h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 0; padding: 14px 16px 8px; }
+.jobs ul { list-style: none; margin: 0; padding: 0 8px 8px; }
+.job { width: 100%; text-align: left; display: grid; gap: 4px; padding: 10px 10px; border-radius: 8px; border: 1px solid transparent; background: transparent; cursor: pointer; }
+.job:hover { background: var(--surface-2); }
+.job.on { background: var(--accent-wash); border-color: color-mix(in srgb, var(--accent) 35%, transparent); }
+.job-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.job-meta { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--ink-2); }
+.job-sub { font-size: 12px; color: var(--muted); }
+
+/* badges (status = icon + label, never colour alone) */
+.badge { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; padding: 1px 8px 1px 6px; border-radius: 999px;
+  border: 1px solid var(--border); color: var(--ink-2); background: var(--surface); white-space: nowrap; }
+.badge .ic { font-size: 11px; line-height: 1; }
+.badge.ok .ic { color: var(--good-text); }
+.badge.failed .ic { color: var(--critical); }
+.badge.pending .ic { color: var(--warning-text); }
+.badge.working { color: var(--accent); }
+.spin { width: 11px; height: 11px; border-radius: 50%; border: 2px solid var(--accent-wash); border-top-color: var(--accent); animation: spin .8s linear infinite; display: inline-block; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* job view */
+.emptystate { padding: 48px 32px; text-align: center; color: var(--ink-2); }
+.emptystate h2 { color: var(--ink); margin: 0 0 8px; font-size: 18px; }
+.jobhead { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
+.jobhead h1 { font-size: 22px; margin: 0 0 6px; }
+.meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; color: var(--ink-2); font-size: 13px; }
+.meta q { font-weight: 600; color: var(--ink); }
+.actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.progress { margin-top: 14px; padding: 12px 14px; border-radius: 10px; background: var(--accent-wash); color: var(--ink); display: flex; align-items: center; gap: 10px; }
+.progress.failed { background: color-mix(in srgb, var(--critical) 12%, transparent); }
+
+.tiles { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; margin-top: 16px; }
+@media (max-width: 1200px) { .tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.tile { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; box-shadow: var(--shadow); }
+.tile-label { color: var(--ink-2); font-size: 13px; }
+.tile-value { font-size: 26px; font-weight: 600; margin-top: 2px; }
+.tile-sub { color: var(--muted); font-size: 12px; min-height: 17px; }
+
+.filters { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; margin-top: 16px; }
+.filters input[type=search] { flex: 1 1 260px; height: 36px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); }
+.filters select { height: 36px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); padding: 0 8px; max-width: 260px; }
+.filters label { display: inline-flex; align-items: center; gap: 6px; color: var(--ink-2); cursor: pointer; }
+.seg { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; margin-left: auto; }
+.seg button { border: 0; background: var(--surface); padding: 0 14px; height: 34px; cursor: pointer; color: var(--ink-2); }
+.seg button + button { border-left: 1px solid var(--border); }
+.seg button.on { background: var(--accent); color: var(--accent-ink); }
+.countline { margin: 12px 2px 8px; color: var(--ink-2); font-size: 13px; }
+.noresults { padding: 32px; text-align: center; color: var(--ink-2); }
+
+/* table */
+.tablewrap { overflow: auto; max-height: calc(100vh - 200px); }
+table.results { border-collapse: separate; border-spacing: 0; width: 100%; font-variant-numeric: tabular-nums; }
+table.results th { position: sticky; top: 0; z-index: 1; background: var(--surface); text-align: left; font-weight: 600; color: var(--ink-2);
+  font-size: 12px; padding: 10px 12px; border-bottom: 1px solid var(--axis); white-space: nowrap; }
+table.results td { padding: 10px 12px; border-bottom: 1px solid var(--grid); vertical-align: top; }
+table.results tbody tr { cursor: pointer; }
+table.results tbody tr:hover td { background: var(--surface-2); }
+td.num { color: var(--muted); width: 1%; }
+td.addr { min-width: 220px; max-width: 340px; color: var(--ink-2); }
+td.email { max-width: 240px; word-break: break-all; }
+.pname { font-weight: 600; }
+.star { color: var(--warning-text); }
+.warnline { display: inline-block; margin-top: 2px; font-size: 12px; font-weight: 600; color: var(--critical); }
+
+/* cards */
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 12px; }
+.pcard { cursor: pointer; overflow: hidden; display: flex; flex-direction: column; }
+.pcard:hover { border-color: var(--accent); }
+.pcard .thumb { height: 120px; background: var(--surface-2) center/cover no-repeat; }
+.pcard .body { padding: 12px 14px 14px; display: grid; gap: 4px; }
+.pcard .line { color: var(--ink-2); font-size: 13px; word-break: break-word; }
+
+/* map */
+#viewMap { padding: 0; overflow: hidden; }
+#map { height: calc(100vh - 220px); min-height: 420px; isolation: isolate; }
+.leaflet-container { background: var(--surface-2); font: inherit; }
+
+/* drawer */
+.backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.28); z-index: 1150; }
+.drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(620px, 100vw); z-index: 1200; background: var(--surface);
+  border-left: 1px solid var(--border); box-shadow: -8px 0 32px rgba(0,0,0,.12); transform: translateX(100%); transition: transform .18s ease;
+  display: flex; flex-direction: column; }
+.drawer.open { transform: none; }
+.drawer-bar { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--border); }
+.drawer-bar .pos { color: var(--muted); font-size: 12px; margin-right: auto; }
+.drawer-scroll { overflow: auto; padding: 0 22px 32px; }
+.dhead { padding-top: 18px; }
+.dthumb { width: 100%; height: 190px; object-fit: cover; border-radius: 10px; background: var(--surface-2); display: block; margin-bottom: 14px; }
+.dhead h2 { margin: 0; font-size: 21px; }
+.drating { margin-top: 6px; }
+.dactions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+.dsec { margin-top: 22px; }
+.dsec h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 0 0 8px; padding-bottom: 6px; border-bottom: 1px solid var(--grid); }
+dl.kv { display: grid; grid-template-columns: 130px minmax(0, 1fr); gap: 7px 14px; margin: 0; }
+dl.kv dt { color: var(--ink-2); }
+dl.kv dd { margin: 0; word-break: break-word; }
+.copy { border: 1px solid var(--border); background: var(--surface); border-radius: 5px; font-size: 11px; padding: 0 6px; height: 20px; cursor: pointer; color: var(--ink-2); margin-left: 4px; vertical-align: 1px; }
+.copy:hover { background: var(--surface-2); }
+table.hours { border-collapse: collapse; width: 100%; }
+table.hours th { text-align: left; font-weight: 500; color: var(--ink-2); padding: 4px 0; width: 160px; }
+table.hours td { padding: 4px 0; }
+table.hours tr.today th, table.hours tr.today td { font-weight: 650; color: var(--ink); }
+.tag { font-size: 10px; font-weight: 650; text-transform: uppercase; letter-spacing: .04em; background: var(--accent-wash); color: var(--accent); padding: 1px 6px; border-radius: 4px; margin-left: 4px; }
+
+/* charts: single series, one hue, thin marks, 4px data-ends, square at baseline */
+.pt-tabs { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 10px; }
+.pt-tabs button { border: 1px solid var(--border); background: var(--surface); border-radius: 6px; height: 26px; padding: 0 9px; font-size: 12px; cursor: pointer; color: var(--ink-2); }
+.pt-tabs button.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.ptbars { display: flex; align-items: stretch; gap: 2px; height: 120px; border-bottom: 1px solid var(--axis); padding-bottom: 0; }
+.ptcol { flex: 1 1 0; max-width: 24px; display: flex; flex-direction: column; justify-content: flex-end; position: relative; cursor: default; }
+.ptcol:hover { background: var(--accent-wash); border-radius: 4px 4px 0 0; }
+.ptbar { background: var(--accent); border-radius: 4px 4px 0 0; width: 100%; }
+.ptlabels { display: flex; gap: 2px; margin-top: 4px; }
+.ptlabels span { flex: 1 1 0; max-width: 24px; font-size: 10px; color: var(--muted); white-space: nowrap; overflow: visible; }
+.rdist { display: grid; gap: 6px; max-width: 420px; }
+.rrow { display: grid; grid-template-columns: 34px 1fr 48px; align-items: center; gap: 10px; padding: 2px 0; border-radius: 4px; }
+.rrow:hover { background: var(--accent-wash); }
+.rlab { color: var(--ink-2); font-size: 12px; text-align: right; }
+.rtrack { height: 10px; position: relative; border-left: 1px solid var(--axis); }
+.rbar { position: absolute; left: 0; top: 0; bottom: 0; background: var(--accent); border-radius: 0 4px 4px 0; }
+.rval { font-size: 12px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+
+.about-g + .about-g { margin-top: 10px; }
+.about-h { font-weight: 600; margin-bottom: 4px; }
+.chips { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.chips li { font-size: 12px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface-2); }
+.chips li.yes span { color: var(--good-text); }
+.chips li.no { color: var(--muted); text-decoration: line-through; }
+.review { display: grid; grid-template-columns: 36px 1fr; gap: 10px; padding: 12px 0; border-bottom: 1px solid var(--grid); }
+.review img, .review .avatar { width: 36px; height: 36px; border-radius: 50%; background: var(--surface-3); object-fit: cover; }
+.review p { margin: 4px 0 0; white-space: pre-wrap; }
+.review .reply { color: var(--ink-2); background: var(--surface-2); padding: 6px 10px; border-radius: 8px; }
+.stars { color: var(--warning-text); letter-spacing: 1px; }
+.gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; }
+.gallery a { display: block; color: var(--ink-2); font-size: 11px; }
+.gallery img { width: 100%; height: 100px; object-fit: cover; border-radius: 8px; background: var(--surface-2); display: block; }
+details.raw summary { cursor: pointer; color: var(--ink-2); font-weight: 550; }
+details.raw pre { background: var(--surface-2); padding: 12px; border-radius: 8px; overflow: auto; max-height: 420px; font-size: 12px; }
+
+.tip { position: fixed; z-index: 1300; pointer-events: none; background: var(--ink); color: var(--page); font-size: 12px; padding: 5px 8px; border-radius: 6px; white-space: nowrap; }
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s7-6.2 7-12a7 7 0 1 0-14 0c0 5.8 7 12 7 12z"/><circle cx="12" cy="10" r="2.6"/></svg>
+    Lead Finder <span>Google Maps</span>
+  </div>
+  <div id="scraperStatus" aria-live="polite"></div>
+</header>
+
+<div class="wrap">
+  <section class="card search">
+    <form id="searchForm" autocomplete="off">
+      <label class="big" for="q">What do you want to find?</label>
+      <div class="searchrow">
+        <textarea id="q" rows="1" placeholder="DMart in Jaipur" required></textarea>
+        <button id="btnSearch" class="btn primary" type="submit">Search</button>
+      </div>
+      <div class="opts">
+        <label><input type="checkbox" id="optEmail" checked> Find emails <span class="muted small">(checks each business website, slower)</span></label>
+        <label><input type="checkbox" id="optReviews"> Load extra reviews</label>
+        <label>Coverage
+          <select id="optCoverage">
+            <option value="area" selected>Whole area (recommended)</option>
+            <option value="dense">Whole area, dense (more places, slower)</option>
+            <option value="very_dense">Whole area, very dense (slowest)</option>
+            <option value="exact">Exact search only (fast, Google's short list)</option>
+          </select>
+        </label>
+        <label>Time limit
+          <select id="optTime">
+            <option value="0" selected>Automatic</option>
+            <option value="15">15 min</option>
+            <option value="30">30 min</option>
+            <option value="60">1 hour</option>
+            <option value="120">2 hours</option>
+            <option value="180">3 hours</option>
+          </select>
+        </label>
+        <span class="hint">Write it as <b>what in where</b>, e.g. "hotels in Jaipur". Google gives at most ~120 places per search (and sometimes only ~20), so <b>Whole area</b> splits the city into map zones, searches each one and merges the results. Use Shift+Enter for more lines.</span>
+      </div>
+      <div id="planLine" class="planline" aria-live="polite"></div>
+      <div id="formMsg" class="formmsg" role="status"></div>
+    </form>
+  </section>
+
+  <div class="layout">
+    <aside class="card jobs" aria-label="Searches">
+      <h2>Searches</h2>
+      <ul id="jobList"></ul>
+    </aside>
+
+    <main>
+      <div id="empty" class="card emptystate">
+        <h2>Search Google Maps for businesses</h2>
+        <p>Type a business and a place above, for example <b>DMart in Jaipur</b> or <b>paper cup manufacturers in Jaipur</b>.<br>
+        Every place found appears here with phone, email, website, address, hours, ratings, reviews and photos.</p>
+      </div>
+
+      <div id="jobView" hidden>
+        <div class="jobhead">
+          <div>
+            <h1 id="jobTitle"></h1>
+            <div id="jobMeta" class="meta"></div>
+          </div>
+          <div class="actions">
+            <button id="btnExport" class="btn" type="button">Download CSV</button>
+            <a id="btnRaw" class="btn ghost" href="#">Raw file (all fields)</a>
+            <button id="btnDelete" class="btn ghost danger" type="button">Delete</button>
+          </div>
+        </div>
+        <div id="progress" class="progress" hidden></div>
+        <div id="tiles" class="tiles"></div>
+
+        <div class="filters">
+          <input id="fText" type="search" placeholder="Filter by name, address, phone, email…" aria-label="Filter results">
+          <select id="fCat" aria-label="Category"><option value="">All categories</option></select>
+          <label><input type="checkbox" id="fEmail"> Has email</label>
+          <label><input type="checkbox" id="fPhone"> Has phone</label>
+          <label><input type="checkbox" id="fWeb"> Has website</label>
+          <select id="fSort" aria-label="Sort">
+            <option value="">Google order</option>
+            <option value="rating">Highest rated</option>
+            <option value="reviews">Most reviews</option>
+            <option value="name">Name A–Z</option>
+          </select>
+          <div class="seg" role="group" aria-label="View">
+            <button type="button" data-view="table" class="on">Table</button>
+            <button type="button" data-view="cards">Cards</button>
+            <button type="button" data-view="map">Map</button>
+          </div>
+        </div>
+        <div id="countLine" class="countline"></div>
+
+        <div id="viewTable" class="card tablewrap">
+          <table class="results">
+            <thead><tr><th>#</th><th>Name</th><th>Rating</th><th>Phone</th><th>Email</th><th>Website</th><th>Address</th><th>Hours today</th><th></th></tr></thead>
+            <tbody id="tbody"></tbody>
+          </table>
+          <div id="noResults" class="noresults" hidden></div>
+        </div>
+        <div id="viewCards" class="cards" hidden></div>
+        <div id="viewMap" class="card" hidden><div id="map"></div></div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<div id="backdrop" class="backdrop" hidden></div>
+<aside id="drawer" class="drawer" aria-hidden="true" aria-label="Place details">
+  <div class="drawer-bar">
+    <span id="dPos" class="pos"></span>
+    <button id="dPrev" class="btn small ghost" type="button">← Previous</button>
+    <button id="dNext" class="btn small ghost" type="button">Next →</button>
+    <button id="dClose" class="btn small" type="button" aria-label="Close details">Close ✕</button>
+  </div>
+  <div class="drawer-scroll" id="drawerBody"></div>
+</aside>
+<div id="tip" class="tip" hidden></div>
+
+<script src="/vendor/leaflet.js"></script>
+<script>
+(() => {
+'use strict';
+const $ = (s, el = document) => el.querySelector(s);
+const $$ = (s, el = document) => [...el.querySelectorAll(s)];
+const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+const JS_DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const nf = new Intl.NumberFormat('en-IN');
+const state = { jobs: [], jobId: null, job: null, places: [], placesKey: '', list: [], view: 'table',
+  open: null, openPlace: null, ptDay: null, map: null, layer: null, fitKey: '' };
+
+// ---------- helpers (all scraped text is untrusted: always escape) ----------
+const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const safeUrl = u => { try { const x = new URL(String(u)); return /^https?:$/.test(x.protocol) ? x.href : ''; } catch { return ''; } };
+const telHref = p => { const d = String(p || '').replace(/[^\d+]/g, ''); return d.length >= 5 ? 'tel:' + d : ''; };
+const isEmail = e => /^[^\s@<>"'(),;:]+@[^\s@<>"'(),;:]+\.[a-z]{2,}$/i.test(e);
+const today = () => JS_DAYS[new Date().getDay()];
+const dayOrder = d => { const i = DAYS.indexOf(d); return i < 0 ? 99 : i; };
+const hostOf = u => { try { return new URL(u).hostname.replace(/^www\./, ''); } catch { return String(u); } };
+const num = v => (typeof v === 'number' && isFinite(v)) ? v : 0;
+const plural = (n, w) => `${nf.format(n)} ${w}${n === 1 ? '' : 's'}`;
+const pct = (n, d) => d ? Math.round(n * 100 / d) + '% of places' : '';
+const emailsOf = p => (p.emails || []).filter(isEmail);
+// percent-encode characters that could end a CSS url('...') token
+const cssUrl = u => String(u).replace(/['"()\\\s]/g, c => '%' + c.charCodeAt(0).toString(16).toUpperCase().padStart(2, '0'));
+const DASH = '<span class="muted">—</span>';
+
+function timeAgo(iso) {
+  const t = new Date(iso).getTime(); if (!t) return '';
+  const s = Math.round((Date.now() - t) / 1000);
+  if (s < 60) return 'just now';
+  const m = Math.round(s / 60); if (m < 60) return m + ' min ago';
+  const h = Math.round(m / 60); if (h < 24) return h + ' h ago';
+  return new Date(t).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+}
+function hoursToday(p) {
+  const h = p.open_hours; if (!h || typeof h !== 'object') return '';
+  const v = h[today()]; return Array.isArray(v) ? v.join(', ') : (v || '');
+}
+const STATUS = { pending: ['Queued', '◷'], working: ['Scraping', ''], ok: ['Done', '✓'], failed: ['Failed', '✕'] };
+function badge(status) {
+  const [label, icon] = STATUS[status] || [status || 'Unknown', '•'];
+  const mark = status === 'working' ? '<span class="spin" aria-hidden="true"></span>' : `<span class="ic" aria-hidden="true">${icon}</span>`;
+  return `<span class="badge ${esc(status)}">${mark}${esc(label)}</span>`;
+}
+async function api(path, opts = {}) {
+  const res = await fetch(path, { ...opts, headers: { 'Content-Type': 'application/json', ...(opts.headers || {}) } });
+  const text = await res.text(); let data = null;
+  try { data = text ? JSON.parse(text) : null; } catch { /* not json */ }
+  if (!res.ok) throw new Error((data && data.error) || text || res.statusText);
+  return data;
+}
+function flash(msg, isError) {
+  const el = $('#formMsg'); el.textContent = msg; el.classList.toggle('error', !!isError);
+  clearTimeout(flash.t); flash.t = setTimeout(() => { el.textContent = ''; }, isError ? 12000 : 6000);
+}
+
+// ---------- scraper health ----------
+async function checkHealth() {
+  const el = $('#scraperStatus');
+  try {
+    const h = await api('/api/health');
+    el.innerHTML = h.scraper
+      ? `<span class="badge ok"><span class="ic" aria-hidden="true">✓</span>Scraper running</span>`
+      : `<span class="badge failed"><span class="ic" aria-hidden="true">✕</span>Scraper not running</span> <button id="btnStart" class="btn small" type="button">Start scraper</button>`;
+  } catch {
+    el.innerHTML = `<span class="badge failed"><span class="ic" aria-hidden="true">✕</span>Dashboard server stopped. Run "Open Lead Finder.bat" again</span>`;
+  }
+}
+
+// ---------- jobs ----------
+async function loadJobs() {
+  try { state.jobs = await api('/api/jobs'); }
+  catch (e) { renderJobs(e.message); return; }
+  if (!state.jobId || !state.jobs.some(j => j.id === state.jobId)) state.jobId = state.jobs[0]?.id || null;
+  state.job = state.jobs.find(j => j.id === state.jobId) || null;
+  renderJobs();
+  await loadPlaces(false);
+}
+function renderJobs(err) {
+  const ul = $('#jobList');
+  if (err) { ul.innerHTML = `<li class="pad muted">${esc(err)}</li>`; return; }
+  if (!state.jobs.length) { ul.innerHTML = `<li class="pad muted">No searches yet.</li>`; return; }
+  ul.innerHTML = state.jobs.map(j => `
+    <li><button type="button" class="job ${j.id === state.jobId ? 'on' : ''}" data-id="${esc(j.id)}">
+      <span class="job-name">${esc(j.name)}</span>
+      <span class="job-meta">${badge(j.status)}<span>${plural(j.count, 'place')}</span></span>
+      <span class="job-sub">${esc(timeAgo(j.date))}${j.zones ? ` · ${plural(j.zones, 'zone')}` : ''}${j.email ? ' · emails on' : ''}</span>
+    </button></li>`).join('');
+}
+async function selectJob(id) {
+  state.jobId = id; state.job = state.jobs.find(j => j.id === id) || null;
+  renderJobs(); await loadPlaces(true);
+}
+async function loadPlaces(force) {
+  const job = state.job;
+  if (!job) { state.places = []; state.placesKey = ''; renderMain(); return; }
+  const key = `${job.id}|${job.count}|${job.status}`;
+  if (!force && key === state.placesKey) return;
+  const switched = !state.placesKey.startsWith(job.id + '|');
+  try { state.places = await api(`/api/jobs/${job.id}/places`); }
+  catch { if (switched) state.places = []; }
+  state.placesKey = key;
+  if (switched) { resetFilters(); closeDrawer(); state.fitKey = ''; }
+  renderMain();
+}
+
+// ---------- main view ----------
+function renderMain() {
+  const job = state.job;
+  $('#empty').hidden = !!job; $('#jobView').hidden = !job;
+  if (!job) return;
+  $('#jobTitle').textContent = job.name;
+  const cover = job.zones
+    ? `Whole area, ${plural(job.zones, 'map zone')}${job.areas.length ? ' of ' + job.areas.map(a => esc(a.where)).join(', ') : ''}`
+    : 'Exact search';
+  $('#jobMeta').innerHTML = `${badge(job.status)}
+    <span>Searched ${job.keywords.map(k => `<q>${esc(k)}</q>`).join(', ')}</span>
+    <span>· ${cover}</span>
+    <span>· ${esc(new Date(job.date).toLocaleString())}</span>
+    <span>· Emails ${job.email ? 'on' : 'off'}</span>`;
+  $('#btnRaw').href = `/api/jobs/${encodeURIComponent(job.id)}/raw.csv`;
+  const prog = $('#progress');
+  prog.className = 'progress';
+  if (job.status === 'working') {
+    prog.hidden = false;
+    prog.innerHTML = `<span class="spin" aria-hidden="true"></span><span>Scraping Google Maps${job.zones ? ` across ${plural(job.zones, 'map zone')}` : ''}… <b>${plural(state.places.length, 'place')}</b> so far.
+      ${job.email ? 'Each business website is checked for emails, so places arrive gradually.' : ''}
+      ${job.zones ? `Whole-area searches can take a while (stops by itself; limit ${fmtMinutes(job.max_minutes || 0)}).` : ''} This page updates by itself.</span>`;
+  } else if (job.status === 'pending') {
+    prog.hidden = false;
+    prog.innerHTML = `<span aria-hidden="true">◷</span><span>Waiting to start. The scraper runs one search at a time.</span>`;
+  } else if (job.status === 'failed') {
+    prog.hidden = false; prog.classList.add('failed');
+    prog.innerHTML = `<span aria-hidden="true">✕</span><span>This search failed. Check the scraper window for the error, then try again.</span>`;
+  } else prog.hidden = true;
+  renderTiles(); renderCategories(); renderResults();
+}
+function renderTiles() {
+  const P = state.places, n = P.length;
+  const withPhone = P.filter(p => p.phone).length;
+  const withEmail = P.filter(p => emailsOf(p).length).length;
+  const withWeb = P.filter(p => p.website).length;
+  const rated = P.filter(p => num(p.review_count) > 0);
+  const totalReviews = rated.reduce((s, p) => s + num(p.review_count), 0);
+  const avg = totalReviews ? rated.reduce((s, p) => s + num(p.review_rating) * num(p.review_count), 0) / totalReviews : 0;
+  const emailSub = state.job && !state.job.email ? 'Email search was off' : pct(withEmail, n);
+  const tile = (label, value, sub) => `<div class="tile"><div class="tile-label">${label}</div><div class="tile-value">${value}</div><div class="tile-sub">${sub || ''}</div></div>`;
+  $('#tiles').innerHTML =
+    tile('Places found', nf.format(n), state.job?.status === 'working' ? 'still searching' : '') +
+    tile('With phone', nf.format(withPhone), pct(withPhone, n)) +
+    tile('With email', nf.format(withEmail), emailSub) +
+    tile('With website', nf.format(withWeb), pct(withWeb, n)) +
+    tile('Average rating', avg ? '★ ' + avg.toFixed(1) : '–', totalReviews ? 'across ' + plural(totalReviews, 'review') : '');
+}
+function renderCategories() {
+  const sel = $('#fCat'), cur = sel.value, counts = new Map();
+  state.places.forEach(p => { const c = p.category || 'Uncategorised'; counts.set(c, (counts.get(c) || 0) + 1); });
+  sel.innerHTML = `<option value="">All categories</option>` +
+    [...counts].sort((a, b) => b[1] - a[1]).map(([c, k]) => `<option value="${esc(c)}">${esc(c)} (${k})</option>`).join('');
+  sel.value = counts.has(cur) ? cur : '';
+}
+function filterSig() { return [$('#fText').value, $('#fCat').value, $('#fEmail').checked, $('#fPhone').checked, $('#fWeb').checked].join('|'); }
+function resetFilters() { $('#fText').value = ''; $('#fCat').value = ''; $('#fEmail').checked = $('#fPhone').checked = $('#fWeb').checked = false; $('#fSort').value = ''; }
+function filtered() {
+  const t = $('#fText').value.trim().toLowerCase(), cat = $('#fCat').value;
+  const fe = $('#fEmail').checked, fp = $('#fPhone').checked, fw = $('#fWeb').checked;
+  const list = state.places.filter(p => {
+    if (cat && (p.category || 'Uncategorised') !== cat) return false;
+    if (fe && !emailsOf(p).length) return false;
+    if (fp && !p.phone) return false;
+    if (fw && !p.website) return false;
+    if (t) {
+      const hay = [p.title, p.category, p.address, p.phone, (p.emails || []).join(' '), p.website, p.plus_code].join(' ').toLowerCase();
+      if (!hay.includes(t)) return false;
+    }
+    return true;
+  });
+  const s = $('#fSort').value;
+  if (s === 'rating') list.sort((a, b) => num(b.review_rating) - num(a.review_rating) || num(b.review_count) - num(a.review_count));
+  else if (s === 'reviews') list.sort((a, b) => num(b.review_count) - num(a.review_count));
+  else if (s === 'name') list.sort((a, b) => String(a.title).localeCompare(String(b.title)));
+  return list;
+}
+function renderResults() {
+  const list = filtered(); state.list = list;
+  const total = state.places.length;
+  $('#countLine').textContent = list.length === total ? `Showing all ${plural(total, 'place')}` : `Showing ${nf.format(list.length)} of ${plural(total, 'place')}`;
+  $('#viewTable').hidden = state.view !== 'table'; $('#viewCards').hidden = state.view !== 'cards'; $('#viewMap').hidden = state.view !== 'map';
+  $$('.seg button').forEach(b => b.classList.toggle('on', b.dataset.view === state.view));
+  const nr = $('#noResults');
+  nr.hidden = list.length > 0;
+  if (!list.length) {
+    const st = state.job?.status;
+    nr.innerHTML = total ? 'No places match these filters.'
+      : st === 'ok' ? 'No places found. Try other wording, e.g. <b>DMart Jaipur</b>, or name a specific area.'
+      : st === 'failed' ? 'No results.' : 'Results will appear here as soon as the first places are scraped.';
+  }
+  if (state.view === 'table') renderTable(list);
+  else if (state.view === 'cards') renderCards(list);
+  else renderMap(list);
+}
+const ratingCell = p => num(p.review_count)
+  ? `<span class="star" aria-hidden="true">★</span> ${num(p.review_rating).toFixed(1)} <span class="muted">(${nf.format(p.review_count)})</span>`
+  : '<span class="muted">No reviews</span>';
+const phoneLink = p => { if (!p.phone) return DASH; const h = telHref(p.phone); return h ? `<a href="${esc(h)}">${esc(p.phone)}</a>` : esc(p.phone); };
+const webLink = p => { const u = safeUrl(p.website); return u ? `<a href="${esc(u)}" target="_blank" rel="noopener noreferrer">${esc(hostOf(u))}</a>` : DASH; };
+function emailCell(p, max = 2) {
+  const e = emailsOf(p);
+  if (!e.length) return DASH;
+  return e.slice(0, max).map(x => `<a href="mailto:${esc(x)}">${esc(x)}</a>`).join('<br>') + (e.length > max ? `<br><span class="muted">+${e.length - max} more</span>` : '');
+}
+function renderTable(list) {
+  $('#tbody').innerHTML = list.map((p, i) => `<tr data-n="${p._n}" tabindex="0">
+    <td class="num">${i + 1}</td>
+    <td><div class="pname">${esc(p.title)}</div><div class="muted">${esc(p.category)}</div>${p.status ? `<div class="warnline">${esc(p.status)}</div>` : ''}</td>
+    <td class="nowrap">${ratingCell(p)}</td>
+    <td class="nowrap">${phoneLink(p)}</td>
+    <td class="email">${emailCell(p)}</td>
+    <td>${webLink(p)}</td>
+    <td class="addr">${esc(p.address) || DASH}</td>
+    <td>${esc(hoursToday(p)) || DASH}</td>
+    <td><button type="button" class="btn small ghost" data-open="${p._n}">Details</button></td></tr>`).join('');
+}
+function renderCards(list) {
+  $('#viewCards').innerHTML = list.map(p => {
+    const img = safeUrl(p.thumbnail);
+    return `<article class="card pcard" data-n="${p._n}" tabindex="0">
+      <div class="thumb"${img ? ` style="background-image:url('${esc(cssUrl(img))}')"` : ''}></div>
+      <div class="body">
+        <div class="pname">${esc(p.title)}</div>
+        <div class="muted small">${esc(p.category)}${p.status ? ` · <span class="warnline">${esc(p.status)}</span>` : ''}</div>
+        <div>${ratingCell(p)}</div>
+        <div class="line">${esc(p.address) || ''}</div>
+        <div class="line">${phoneLink(p)}</div>
+        <div class="line">${emailCell(p, 1)}</div>
+        <div class="line">${webLink(p)}</div>
+        ${hoursToday(p) ? `<div class="line">Today: ${esc(hoursToday(p))}</div>` : ''}
+      </div></article>`;
+  }).join('');
+}
+function renderMap(list) {
+  if (!window.L) { $('#map').innerHTML = '<div class="pad muted">The map library did not load.</div>'; return; }
+  if (!state.map) {
+    state.map = L.map('map', { zoomControl: true });
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap contributors' }).addTo(state.map);
+    state.layer = L.featureGroup().addTo(state.map);
+  }
+  state.map.invalidateSize();
+  state.layer.clearLayers();
+  const css = getComputedStyle(document.documentElement);
+  const fill = css.getPropertyValue('--accent').trim(), ring = css.getPropertyValue('--surface').trim();
+  list.forEach(p => {
+    if (!(num(p.latitude) || num(p.longitude))) return;
+    L.circleMarker([p.latitude, p.longitude], { radius: 8, weight: 2, color: ring, fillColor: fill, fillOpacity: 1 })
+      .bindTooltip(esc(p.title), { direction: 'top', offset: [0, -8] })
+      .on('click', () => openDrawer(p._n))
+      .addTo(state.layer);
+  });
+  const has = state.layer.getLayers().length > 0;
+  // dashed outline of the area a whole-area search covered
+  (state.job?.areas || []).forEach(a => {
+    if (Array.isArray(a.box) && a.box.length === 4) {
+      L.rectangle([[a.box[0], a.box[1]], [a.box[2], a.box[3]]], { color: css.getPropertyValue('--muted').trim(), weight: 1.5,
+        dashArray: '6 6', fill: false, interactive: false }).addTo(state.layer);
+    }
+  });
+  const key = `${state.jobId}|${filterSig()}|${has}`;
+  if (key !== state.fitKey) {
+    state.fitKey = key;
+    if (has) state.map.fitBounds(state.layer.getBounds().pad(0.15), { maxZoom: 15 });
+    else state.map.setView([22.6, 79.0], 4);
+  }
+}
+
+// ---------- details drawer ----------
+function openDrawer(n) {
+  const p = state.places.find(x => x._n === n); if (!p) return;
+  state.open = n; state.openPlace = p;
+  $('#drawerBody').innerHTML = detailHTML(p);
+  const idx = state.list.findIndex(x => x._n === n);
+  $('#dPrev').disabled = idx <= 0;
+  $('#dNext').disabled = idx < 0 || idx >= state.list.length - 1;
+  $('#dPos').textContent = idx >= 0 ? `${idx + 1} of ${state.list.length}` : '';
+  $('#drawer').classList.add('open'); $('#drawer').setAttribute('aria-hidden', 'false');
+  $('#backdrop').hidden = false; $('#drawerBody').scrollTop = 0;
+  const days = ptDays(p.popular_times);
+  if (days.length) setPTDay(days.includes(today()) ? today() : days[0]);
+}
+function closeDrawer() {
+  $('#drawer').classList.remove('open'); $('#drawer').setAttribute('aria-hidden', 'true');
+  $('#backdrop').hidden = true; state.open = null; state.openPlace = null;
+}
+function step(d) {
+  const idx = state.list.findIndex(x => x._n === state.open);
+  const next = state.list[idx + d]; if (next) openDrawer(next._n);
+}
+const link = (u, text) => { const s = safeUrl(u); return s ? `<a href="${esc(s)}" target="_blank" rel="noopener noreferrer">${esc(text || s)}</a>` : ''; };
+const copyBtn = v => `<button type="button" class="copy" data-copy="${esc(v)}">Copy</button>`;
+const kv = rows => { const r = rows.filter(([, v]) => v); return r.length ? `<dl class="kv">${r.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl>` : ''; };
+const sec = (title, body) => body ? `<section class="dsec"><h3>${title}</h3>${body}</section>` : '';
+const linkList = arr => (Array.isArray(arr) ? arr : []).map(x => x && link(x.link, x.source || hostOf(x.link))).filter(Boolean).join('<br>');
+
+function detailHTML(p) {
+  const A = p.complete_address || {};
+  const img = safeUrl(p.thumbnail), maps = safeUrl(p.link), web = safeUrl(p.website);
+  const emails = emailsOf(p);
+  const emailVal = emails.length
+    ? emails.map(e => `<a href="mailto:${esc(e)}">${esc(e)}</a>${copyBtn(e)}`).join('<br>')
+    : `<span class="muted">${!state.job?.email ? 'Email search was off for this search' : p.website ? 'None found on the website' : 'No website to check'}</span>`;
+  const head = `<div class="dhead">
+      ${img ? `<img class="dthumb" src="${esc(img)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ''}
+      <h2>${esc(p.title)}</h2>
+      <div class="muted">${esc(p.category)}${p.price_range ? ' · ' + esc(p.price_range) : ''}</div>
+      ${p.status ? `<div class="warnline">${esc(p.status)}</div>` : ''}
+      <div class="drating">${ratingCell(p)}</div>
+      <div class="dactions">
+        ${maps ? `<a class="btn small" href="${esc(maps)}" target="_blank" rel="noopener noreferrer">Open in Google Maps</a>` : ''}
+        ${web ? `<a class="btn small ghost" href="${esc(web)}" target="_blank" rel="noopener noreferrer">Visit website</a>` : ''}
+      </div></div>`;
+  const contact = kv([
+    ['Phone', p.phone ? phoneLink(p) + copyBtn(p.phone) : DASH],
+    ['Email', emailVal],
+    ['Website', web ? link(web) + copyBtn(web) : DASH],
+    ['Owner', p.owner && p.owner.name ? (link(p.owner.link, p.owner.name) || esc(p.owner.name)) : ''],
+  ]);
+  const coords = (num(p.latitude) || num(p.longitude)) ? `${p.latitude.toFixed(6)}, ${p.longitude.toFixed(6)}` : '';
+  const address = kv([
+    ['Full address', p.address ? esc(p.address) + copyBtn(p.address) : ''],
+    ['Street', esc(A.street)], ['Area', esc(A.borough)], ['City', esc(A.city)], ['PIN code', esc(A.postal_code)],
+    ['State', esc(A.state)], ['Country', esc(A.country)], ['Plus code', esc(p.plus_code)],
+    ['Coordinates', coords ? esc(coords) + copyBtn(coords) : ''], ['Time zone', esc(p.timezone)],
+  ]);
+  const online = kv([
+    ['Menu', p.menu && p.menu.link ? link(p.menu.link, p.menu.source || 'Menu') : ''],
+    ['Reservations', linkList(p.reservations)],
+    ['Order online', linkList(p.order_online)],
+    ['Cards accepted', esc((p.credit_cards_accepted || []).join(', '))],
+    ['All reviews', link(p.reviews_link, 'Open reviews page')],
+    ['Street View', link(p.street_view_url, 'Open Street View')],
+  ]);
+  const ids = kv([
+    ['Place ID', p.place_id ? esc(p.place_id) + copyBtn(p.place_id) : ''], ['CID', esc(p.cid)],
+    ['Data ID', esc(p.data_id)], ['Search ID', esc(p.input_id)],
+  ]);
+  const raw = Object.fromEntries(Object.entries(p).filter(([k]) => k !== '_n'));
+  const about = [p.descriptions ? `<p style="margin-top:0">${esc(p.descriptions)}</p>` : '', aboutHTML(p.about)].join('');
+  return head +
+    sec('Contact', contact) +
+    sec('Address &amp; location', address) +
+    sec('Opening hours', hoursHTML(p.open_hours)) +
+    sec('Popular times', popularHTML(p.popular_times)) +
+    sec('Ratings', ratingDist(p.reviews_per_rating)) +
+    sec('About', about) +
+    sec('Links', online) +
+    sec('Reviews', reviewsHTML(p)) +
+    sec('Photos', imagesHTML(p.images)) +
+    sec('Identifiers', ids) +
+    sec('All fields', `<details class="raw"><summary>Show raw data for this place</summary><pre>${esc(JSON.stringify(raw, null, 2))}</pre></details>`);
+}
+function hoursHTML(h) {
+  if (!h || typeof h !== 'object' || !Object.keys(h).length) return '';
+  const t = today();
+  return `<table class="hours">${Object.keys(h).sort((a, b) => dayOrder(a) - dayOrder(b)).map(d =>
+    `<tr class="${d === t ? 'today' : ''}"><th>${esc(d)}${d === t ? '<span class="tag">Today</span>' : ''}</th><td>${esc([].concat(h[d]).join(', '))}</td></tr>`).join('')}</table>`;
+}
+function ptDays(pt) {
+  if (!pt || typeof pt !== 'object') return [];
+  return Object.keys(pt).filter(d => pt[d] && typeof pt[d] === 'object' && Object.keys(pt[d]).length).sort((a, b) => dayOrder(a) - dayOrder(b));
+}
+function popularHTML(pt) {
+  const days = ptDays(pt); if (!days.length) return '';
+  return `<div class="pt-tabs" role="group" aria-label="Day">${days.map(d => `<button type="button" data-day="${esc(d)}">${esc(d.slice(0, 3))}</button>`).join('')}</div><div id="ptChart"></div>`;
+}
+const fmtHour = h => { const hh = ((h % 24) + 24) % 24; return (hh % 12 || 12) + (hh < 12 ? ' am' : ' pm'); };
+function setPTDay(day) {
+  const p = state.openPlace; const el = $('#ptChart'); if (!p || !el) return;
+  $$('.pt-tabs button').forEach(b => b.classList.toggle('on', b.dataset.day === day));
+  const entries = Object.entries((p.popular_times || {})[day] || {}).map(([h, v]) => [Number(h), Number(v)])
+    .filter(([h, v]) => isFinite(h) && isFinite(v)).sort((a, b) => a[0] - b[0]);
+  if (!entries.length) { el.innerHTML = '<div class="muted">No data for this day.</div>'; return; }
+  const max = Math.max(100, ...entries.map(e => e[1]));
+  el.innerHTML = `<div class="ptbars" role="img" aria-label="How busy by hour on ${esc(day)}">${entries.map(([h, v]) =>
+      `<div class="ptcol" data-tip="${esc(day)} ${esc(fmtHour(h))}: ${v}% busy"><div class="ptbar" style="height:${v > 0 ? Math.max(2, v / max * 100) : 0}%"></div></div>`).join('')}</div>
+    <div class="ptlabels">${entries.map(([h]) => `<span>${h % 3 === 0 ? esc(fmtHour(h).replace(' ', '')) : ''}</span>`).join('')}</div>
+    <div class="muted small" style="margin-top:6px">Typical busy-ness by hour, as a percentage of the busiest time.</div>`;
+}
+function ratingDist(rpr) {
+  if (!rpr || typeof rpr !== 'object') return '';
+  const rows = [5, 4, 3, 2, 1].map(s => [s, num(Number(rpr[s]))]);
+  const total = rows.reduce((a, [, c]) => a + c, 0); if (!total) return '';
+  const max = Math.max(...rows.map(([, c]) => c));
+  return `<div class="rdist" role="img" aria-label="Number of reviews for each star rating">${rows.map(([s, c]) =>
+    `<div class="rrow" data-tip="${s} star: ${plural(c, 'review')} (${Math.round(c * 100 / total)}%)"><span class="rlab">${s} ★</span><span class="rtrack"><span class="rbar" style="width:${max ? c / max * 100 : 0}%"></span></span><span class="rval">${nf.format(c)}</span></div>`).join('')}</div>`;
+}
+function aboutHTML(about) {
+  if (!Array.isArray(about) || !about.length) return '';
+  return about.map(g => `<div class="about-g"><div class="about-h">${esc(g && g.name)}</div><ul class="chips">${((g && g.options) || []).map(o =>
+    `<li class="${o.enabled ? 'yes' : 'no'}"><span aria-hidden="true">${o.enabled ? '✓' : '✕'}</span> ${esc(o.name)}${o.values && o.values.length ? ': ' + esc(o.values.join(', ')) : ''}${o.enabled ? '' : '<span class="muted"> (no)</span>'}</li>`).join('')}</ul></div>`).join('');
+}
+function reviewsHTML(p) {
+  const seen = new Set(), all = [];
+  [...(p.user_reviews || []), ...(p.user_reviews_extended || [])].forEach(r => {
+    if (!r || typeof r !== 'object') return;
+    const key = r.review_id || `${r.Name}|${r.Description || r.text_original || ''}`;
+    if (seen.has(key)) return; seen.add(key); all.push(r);
+  });
+  if (!all.length) return '';
+  return `<div class="muted small">${plural(all.length, 'review')} collected (turn on "Load extra reviews" for more)</div>` + all.map(r => {
+    const text = r.Description || r.text_original || r.text_translated || '';
+    const rating = Math.max(0, Math.min(5, Math.round(num(Number(r.Rating ?? r.rating_float)))));
+    const pic = safeUrl(r.ProfilePicture);
+    const reply = r.reply_text || r.reply_text_original;
+    return `<article class="review">${pic ? `<img src="${esc(pic)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : '<span class="avatar"></span>'}
+      <div><div><b>${esc(r.Name || 'Anonymous')}</b> <span class="stars" aria-label="${rating} out of 5 stars">${'★'.repeat(rating)}${'☆'.repeat(5 - rating)}</span> <span class="muted small">${esc(r.When || '')}</span></div>
+      ${text ? `<p>${esc(text)}</p>` : ''}${reply ? `<p class="reply"><b>Owner reply:</b> ${esc(reply)}</p>` : ''}</div></article>`;
+  }).join('');
+}
+function imagesHTML(imgs) {
+  const list = (Array.isArray(imgs) ? imgs : []).map(i => ({ src: safeUrl(i && i.image), title: (i && i.title) || '' })).filter(i => i.src);
+  if (!list.length) return '';
+  return `<div class="gallery">${list.map(i => `<a href="${esc(i.src)}" target="_blank" rel="noopener noreferrer"><img src="${esc(i.src)}" alt="${esc(i.title)}" loading="lazy" referrerpolicy="no-referrer">${esc(i.title)}</a>`).join('')}</div>`;
+}
+
+// ---------- CSV export (current filter) ----------
+function exportCSV() {
+  const list = state.list, A = p => p.complete_address || {};
+  const hours = p => { const h = p.open_hours; return h && typeof h === 'object' ? Object.keys(h).sort((a, b) => dayOrder(a) - dayOrder(b)).map(d => `${d}: ${[].concat(h[d]).join(', ')}`).join(' | ') : ''; };
+  const cols = [
+    ['Name', p => p.title], ['Category', p => p.category], ['Phone', p => p.phone], ['Emails', p => emailsOf(p).join('; ')],
+    ['Website', p => p.website], ['Address', p => p.address], ['Area', p => A(p).borough], ['City', p => A(p).city],
+    ['PIN code', p => A(p).postal_code], ['State', p => A(p).state], ['Rating', p => num(p.review_count) ? num(p.review_rating).toFixed(1) : ''],
+    ['Reviews', p => p.review_count || ''], ['Status', p => p.status], ['Opening hours', hours], ['Latitude', p => p.latitude], ['Longitude', p => p.longitude],
+    ['Plus code', p => p.plus_code], ['Google Maps link', p => p.link], ['Place ID', p => p.place_id],
+  ];
+  // Quote everything; neutralise spreadsheet formulas (=, +, -, @) in scraped text.
+  const cell = v => { let s = v == null ? '' : String(v); if (/^[=+\-@\t\r]/.test(s)) s = "'" + s; return '"' + s.replace(/"/g, '""') + '"'; };
+  const csv = '﻿' + [cols.map(c => cell(c[0])).join(','), ...list.map(p => cols.map(c => cell(c[1](p))).join(','))].join('\r\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+  a.download = (state.job?.name || 'places').replace(/[^\w\- ]+/g, '').trim().replace(/\s+/g, '-').toLowerCase() + '.csv';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+
+// ---------- events ----------
+document.addEventListener('click', async e => {
+  const t = e.target;
+  const jobBtn = t.closest('.job'); if (jobBtn) { selectJob(jobBtn.dataset.id); return; }
+  const cp = t.closest('[data-copy]');
+  if (cp) { try { await navigator.clipboard.writeText(cp.dataset.copy); cp.textContent = 'Copied'; setTimeout(() => { cp.textContent = 'Copy'; }, 1200); } catch { /* ignore */ } return; }
+  const ob = t.closest('[data-open]'); if (ob) { openDrawer(Number(ob.dataset.open)); return; }
+  const dayBtn = t.closest('[data-day]'); if (dayBtn) { setPTDay(dayBtn.dataset.day); return; }
+  const vb = t.closest('[data-view]'); if (vb) { state.view = vb.dataset.view; renderResults(); return; }
+  if (t.closest('#btnStart')) {
+    const b = t.closest('#btnStart'); b.disabled = true; b.textContent = 'Starting…';
+    try { await api('/api/scraper/start', { method: 'POST', body: '{}' }); } catch (err) { flash(err.message, true); }
+    checkHealth(); return;
+  }
+  if (t.closest('a, button, input, select, label')) return;
+  const row = t.closest('tr[data-n], .pcard[data-n]'); if (row) openDrawer(Number(row.dataset.n));
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && state.open != null) { closeDrawer(); return; }
+  if (state.open != null && (e.key === 'ArrowRight' || e.key === 'ArrowLeft') && !e.target.closest('input, textarea, select')) { step(e.key === 'ArrowRight' ? 1 : -1); return; }
+  if (e.key === 'Enter' && e.target.matches('tr[data-n], .pcard[data-n]')) openDrawer(Number(e.target.dataset.n));
+});
+$('#backdrop').addEventListener('click', closeDrawer);
+$('#dClose').addEventListener('click', closeDrawer);
+$('#dPrev').addEventListener('click', () => step(-1));
+$('#dNext').addEventListener('click', () => step(1));
+['#fText', '#fCat', '#fEmail', '#fPhone', '#fWeb', '#fSort'].forEach(s => $(s).addEventListener(s === '#fText' ? 'input' : 'change', renderResults));
+$('#btnExport').addEventListener('click', exportCSV);
+$('#btnDelete').addEventListener('click', async () => {
+  const b = $('#btnDelete');
+  if (!b.dataset.armed) {
+    b.dataset.armed = '1'; b.textContent = 'Click again to delete';
+    setTimeout(() => { delete b.dataset.armed; b.textContent = 'Delete'; }, 4000); return;
+  }
+  delete b.dataset.armed; b.textContent = 'Delete';
+  try { await api(`/api/jobs/${encodeURIComponent(state.jobId)}`, { method: 'DELETE' }); state.jobId = null; state.placesKey = ''; await loadJobs(); }
+  catch (err) { flash(err.message, true); }
+});
+const q = $('#q');
+const autosize = () => { q.style.height = 'auto'; q.style.height = Math.min(q.scrollHeight + 2, 160) + 'px'; };
+q.addEventListener('input', autosize);
+q.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); $('#searchForm').requestSubmit(); } });
+$('#searchForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const query = q.value.trim(); if (!query) return;
+  const btn = $('#btnSearch'); btn.disabled = true;
+  try {
+    btn.textContent = 'Starting…';
+    const r = await api('/api/jobs', { method: 'POST', body: JSON.stringify({
+      query, email: $('#optEmail').checked, extra_reviews: $('#optReviews').checked,
+      coverage: $('#optCoverage').value, max_minutes: Number($('#optTime').value) }) });
+    flash(r && r.zones
+      ? `Search started: ${r.areas.map(a => `${a.what} across ${a.where}`).join(', ')} in ${plural(r.zones, 'map zone')}. Places appear below as they are found. Large areas can take a while (limit ${fmtMinutes(r.minutes)}).`
+      : 'Search started. Places will appear below as they are found.');
+    q.value = ''; autosize(); $('#planLine').textContent = ''; lastPlanKey = '';
+    state.jobId = r && r.id; state.placesKey = '';
+    await loadJobs();
+  } catch (err) { flash(err.message, true); }
+  finally { btn.disabled = false; btn.textContent = 'Search'; }
+});
+
+// Preview of the zones a whole-area search will cover. Runs when you leave the box or change
+// coverage - never per keystroke (the free OpenStreetMap place lookup does not allow that).
+let lastPlanKey = '', planTimer = null;
+function fmtMinutes(m) { return m >= 60 ? `${Math.floor(m / 60)} h${m % 60 ? ' ' + (m % 60) + ' min' : ''}` : `${m} min`; }
+async function previewPlan() {
+  const el = $('#planLine'), query = q.value.trim(), coverage = $('#optCoverage').value;
+  const key = `${query}|${coverage}|${$('#optEmail').checked}`;
+  if (key === lastPlanKey) return;
+  lastPlanKey = key; el.classList.remove('error');
+  if (!query) { el.textContent = ''; return; }
+  if (coverage === 'exact') { el.innerHTML = 'Exact search: Google decides which places to show (often 20 or fewer, never more than ~120).'; return; }
+  if (!/\s(in|near|around|at)\s/i.test(query)) { el.innerHTML = 'Tip: write it as <b>what in where</b>, e.g. <b>hotels in Jaipur</b>, so the whole area can be searched.'; return; }
+  el.textContent = 'Finding the area on the map…';
+  try {
+    const p = await api('/api/plan', { method: 'POST', body: JSON.stringify({ query, coverage, email: $('#optEmail').checked }) });
+    if (key !== lastPlanKey) return;
+    el.innerHTML = p.areas.map(a => `<b>${esc(a.what)}</b> across <b>${esc(a.name)}</b>: ${plural(a.zones, 'zone')} of about ${esc(a.zone_km)} km` +
+        (a.typed && a.typed.toLowerCase() !== String(a.where).toLowerCase() ? ` <span class="muted">("${esc(a.typed)}" not found exactly, so searching all of ${esc(a.where)})</span>` : '')).join('<br>') +
+      `<br><span class="muted">Stops by itself when done; upper limit ${fmtMinutes(p.minutes)}.</span>`;
+  } catch (err) {
+    if (key !== lastPlanKey) return;
+    el.classList.add('error'); el.textContent = err.message;
+  }
+}
+const schedulePlan = () => { clearTimeout(planTimer); planTimer = setTimeout(previewPlan, 150); };
+q.addEventListener('blur', schedulePlan);
+$('#optCoverage').addEventListener('change', schedulePlan);
+$('#optEmail').addEventListener('change', schedulePlan);
+
+// tooltip for chart marks (hit target = whole column/row)
+const tip = $('#tip');
+document.addEventListener('mouseover', e => { const t = e.target.closest('[data-tip]'); if (!t) { tip.hidden = true; return; } tip.textContent = t.dataset.tip; tip.hidden = false; });
+document.addEventListener('mousemove', e => {
+  if (tip.hidden) return;
+  tip.style.left = Math.max(8, Math.min(e.clientX + 12, innerWidth - tip.offsetWidth - 8)) + 'px';
+  tip.style.top = Math.max(8, e.clientY - tip.offsetHeight - 10) + 'px';
+});
+
+// ---------- polling ----------
+async function tick() {
+  await loadJobs().catch(() => {});
+  const busy = state.jobs.some(j => j.status === 'working' || j.status === 'pending');
+  setTimeout(tick, busy ? 3000 : 10000);
+}
+checkHealth(); setInterval(checkHealth, 10000);
+tick();
+})();
+</script>
+</body>
+</html>

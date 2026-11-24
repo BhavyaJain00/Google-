@@ -1,0 +1,13 @@
+# Scraped results stay on each computer - never upload them
+webdata/
+scraper.log
+
+# Downloaded by the setup script
+google-maps-scraper
+google-maps-scraper.exe
+
+# Local caches written by the dashboard
+dashboard/geocode-cache.json
+dashboard/job-meta.json
+*.tmp
+__pycache__/
